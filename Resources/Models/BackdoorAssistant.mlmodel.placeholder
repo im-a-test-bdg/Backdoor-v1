@@ -1,0 +1,31 @@
+# Core ML Model Placeholder
+
+This file serves as a placeholder for the actual Core ML model that would be included in the production build.
+
+The actual model file should be a properly trained Core ML model with:
+
+- Input features:
+  - "userInput" (String): The processed user message
+  - "appContext" (String): Encoded app context information
+  - "conversationHistory" (String): Recent conversation history
+
+- Output features:
+  - "response" (String): The AI assistant's response
+
+This model should be trained using Create ML or other Core ML compatible tools, and should be designed 
+for on-device learning to improve over time based on user interactions.
+
+# Model Training Recommendations
+
+When creating the actual Core ML model for production:
+
+1. Use a combination of NLP models from Create ML (Text Classifier, Word Tagger) as base
+2. Train on a corpus of Backdoor-specific conversations
+3. Include domain-specific knowledge about app signing, certificates, sources
+4. Enable updatable model configuration for on-device learning
+5. Keep the model size reasonable (<50MB) for efficient loading and prediction
+
+# Model Security
+
+The production model should be signed and include integrity checks to prevent unauthorized 
+modification or replacement. The CoreMLModelSecurity class implements these protections.
