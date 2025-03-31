@@ -47,6 +47,15 @@
       }
     },
     {
+      "identity" : "mlkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/mlkit-swift/mlkit.git",
+      "state" : {
+        "revision" : "fe150b9fa89d2a6358a0e52ee71c65bd1f0c15e8",
+        "version" : "0.5.0"
+      }
+    },
+    {
       "identity" : "multipart-kit",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/vapor/multipart-kit.git",
@@ -188,6 +197,15 @@
       "state" : {
         "revision" : "971ba26378ab69c43737ee7ba967a896cb74c0d1",
         "version" : "2.4.1"
+      }
+    },
+    {
+      "identity" : "swift-nlp",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-nlp.git",
+      "state" : {
+        "revision" : "7f6a93782d9d8a21ee3a18a1f4c83ea58ea0a771",
+        "version" : "0.5.0"
       }
     },
     {

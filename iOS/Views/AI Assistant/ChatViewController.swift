@@ -4,6 +4,8 @@
 //
 // Backdoor App Signer is proprietary software. You may not use, modify, or distribute it except as expressly permitted under the terms of the Proprietary Software License.
 
+import CoreML
+import NaturalLanguage
 import UIKit
 
 class ChatViewController: UIViewController, UITableViewDataSource, UITableViewDelegate, UISheetPresentationControllerDelegate {
@@ -14,6 +16,9 @@ class ChatViewController: UIViewController, UITableViewDataSource, UITableViewDe
     private let textField = UITextField()
     private let sendButton = UIButton(type: .system)
     private let activityIndicator = UIActivityIndicatorView(style: .medium)
+    
+    // CoreML status view
+    private let aiStatusView = ChatStatusView(frame: .zero)
 
     // MARK: - Data
 
@@ -71,6 +76,9 @@ class ChatViewController: UIViewController, UITableViewDataSource, UITableViewDe
         if messages.isEmpty {
             addWelcomeMessage()
         }
+        
+        // Initialize CoreML
+        initializeCoreML()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -98,15 +106,45 @@ class ChatViewController: UIViewController, UITableViewDataSource, UITableViewDe
         Debug.shared.log(message: "ChatViewController deinit", type: .debug)
     }
     
+    // MARK: - CoreML Integration
+    
+    private func initializeCoreML() {
+        // Initialize CoreML integration
+        CoreMLAIIntegration.shared.initialize()
+        
+        // Observe AI processing mode changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(aiProcessingModeChanged),
+            name: NSNotification.Name("AIProcessingModeChanged"),
+            object: nil
+        )
+    }
+    
+    @objc private func aiProcessingModeChanged(_ notification: Notification) {
+        // Update UI to reflect current AI mode if needed
+        // The ChatStatusView will automatically update itself via its own observers
+        
+        if let mode = notification.userInfo?["mode"] as? CustomAIService.ProcessingMode {
+            Debug.shared.log(message: "AI processing mode changed to: \(mode.displayName)", type: .debug)
+        }
+    }
+    
     // MARK: - Welcome Message
     
     private func addWelcomeMessage() {
         do {
-            // Add a welcome message from the AI
+            // Add a welcome message from the AI that mentions CoreML capabilities
+            let welcomeContent = """
+            Hello! I'm your Backdoor assistant with on-device ML capabilities. I can help you sign apps, manage sources, and navigate through the app.
+            
+            I now use Core ML for on-device intelligence when available, providing faster responses and better privacy. How can I assist you today?
+            """
+            
             let welcomeMessage = try CoreDataManager.shared.addMessage(
                 to: currentSession,
                 sender: "ai",
-                content: "Hello! I'm your Backdoor assistant. I can help you sign apps, manage sources, and navigate through the app. How can I assist you today?"
+                content: welcomeContent
             )
             messages.append(welcomeMessage)
             tableView.reloadData()
@@ -186,6 +224,9 @@ class ChatViewController: UIViewController, UITableViewDataSource, UITableViewDe
         // Table view for messages
         setupTableView()
 
+        // AI Status view for CoreML status
+        setupAIStatusView()
+        
         // Input controls
         setupInputControls()
 
@@ -218,6 +259,12 @@ class ChatViewController: UIViewController, UITableViewDataSource, UITableViewDe
         }
 
         view.addSubview(tableView)
+    }
+    
+    private func setupAIStatusView() {
+        // Configure AI status view
+        aiStatusView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(aiStatusView)
     }
 
     private func setupInputControls() {
@@ -260,14 +307,21 @@ class ChatViewController: UIViewController, UITableViewDataSource, UITableViewDe
         textField.translatesAutoresizingMaskIntoConstraints = false
         sendButton.translatesAutoresizingMaskIntoConstraints = false
         activityIndicator.translatesAutoresizingMaskIntoConstraints = false
+        aiStatusView.translatesAutoresizingMaskIntoConstraints = false
 
         // Safe area guide for proper layout
         let safeArea = view.safeAreaLayoutGuide
 
         // Apply constraints
         NSLayoutConstraint.activate([
+            // AI Status view
+            aiStatusView.topAnchor.constraint(equalTo: safeArea.topAnchor, constant: 8),
+            aiStatusView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            aiStatusView.widthAnchor.constraint(lessThanOrEqualToConstant: 200),
+            aiStatusView.heightAnchor.constraint(equalToConstant: 36),
+            
             // Table view
-            tableView.topAnchor.constraint(equalTo: safeArea.topAnchor),
+            tableView.topAnchor.constraint(equalTo: aiStatusView.bottomAnchor, constant: 8),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             tableView.bottomAnchor.constraint(equalTo: inputContainer.topAnchor),
@@ -485,6 +539,10 @@ class ChatViewController: UIViewController, UITableViewDataSource, UITableViewDe
             // Get additional context information from our custom provider
             let contextSummary = CustomAIContextProvider.shared.getContextSummary()
             Debug.shared.log(message: "AI context: \(contextSummary)", type: .debug)
+            
+            // Log the current AI processing mode
+            let processingMode = CustomAIService.shared.currentMode
+            Debug.shared.log(message: "Using AI processing mode: \(processingMode.displayName)", type: .info)
 
             // Convert CoreData ChatMessages to payload format
             let apiMessages = messages.map {
@@ -494,16 +552,20 @@ class ChatViewController: UIViewController, UITableViewDataSource, UITableViewDe
                 )
             }
 
-            // Create temporary "typing" indicator with delay to avoid flashing
+            // Create temporary "typing" indicator with different text based on processing mode
             var typingMessageID: String? = nil
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 guard let self = self, self.isProcessingMessage else { return }
 
                 do {
+                    let thinkingText = processingMode == .onDevice ? 
+                        "Assistant is thinking (on-device)..." : 
+                        "Assistant is thinking..."
+                    
                     let typingMessage = try CoreDataManager.shared.addMessage(
                         to: self.currentSession,
                         sender: "system",
-                        content: "Assistant is thinking..."
+                        content: thinkingText
                     )
                     typingMessageID = typingMessage.messageID
                     self.messages.append(typingMessage)
@@ -688,86 +750,98 @@ class ChatViewController: UIViewController, UITableViewDataSource, UITableViewDe
     }
 
     // Extract commands from AI response text
-    private func extractCommands(from text: String) -> [(command: String, parameter: String)] {
-        let pattern = "\\[([^:]+):([^\\]]+)\\]"
-        do {
-            let regex = try NSRegularExpression(pattern: pattern)
-            let matches = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
-            return matches.compactMap { match in
-                if let commandRange = Range(match.range(at: 1), in: text),
-                   let paramRange = Range(match.range(at: 2), in: text)
-                {
-                    return (String(text[commandRange]), String(text[paramRange]))
+    private func extractCommands(from response: String) -> [(command: String, parameter: String)] {
+        var commands: [(command: String, parameter: String)] = []
+        
+        // Match patterns like [command:parameter]
+        let pattern = "\\[(.*?):(.*?)\\]"
+        
+        if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
+            let nsString = response as NSString
+            let matches = regex.matches(in: response, options: [], range: NSRange(location: 0, length: nsString.length))
+            
+            for match in matches {
+                if match.numberOfRanges >= 3 {
+                    let commandRange = match.range(at: 1)
+                    let parameterRange = match.range(at: 2)
+                    
+                    let command = nsString.substring(with: commandRange).trimmingCharacters(in: .whitespacesAndNewlines)
+                    let parameter = nsString.substring(with: parameterRange).trimmingCharacters(in: .whitespacesAndNewlines)
+                    
+                    commands.append((command, parameter))
                 }
-                return nil
             }
-        } catch {
-            Debug.shared.log(message: "Failed to create regex for command extraction: \(error)", type: .error)
-            return []
         }
+        
+        return commands
     }
-
-    // MARK: - Error Handling
-
+    
+    /// Display an error alert with the given message
     private func showErrorAlert(message: String) {
         let alert = UIAlertController(
             title: "Error",
             message: message,
             preferredStyle: .alert
         )
+        
         alert.addAction(UIAlertAction(title: "OK", style: .default))
-
-        // Check if we can present the alert
-        if !isBeingDismissed && !isBeingPresented && presentedViewController == nil {
-            present(alert, animated: true)
-        } else {
-            Debug.shared.log(message: "Could not present error alert: \(message)", type: .error)
-        }
+        present(alert, animated: true)
     }
+}
 
-    // MARK: - UITableViewDataSource
+// MARK: - UITableViewDataSource
 
-    func tableView(_: UITableView, numberOfRowsInSection _: Int) -> Int {
+extension ChatViewController {
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         return messages.count
     }
-
+    
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        guard indexPath.row < messages.count else {
-            return UITableViewCell() // Safety check
-        }
-
         let message = messages[indexPath.row]
+        
         switch message.sender {
-            case "user":
-                let cell = tableView.dequeueReusableCell(withIdentifier: "UserCell", for: indexPath) as! UserMessageCell
-                cell.configure(with: message)
-                return cell
-            case "ai":
-                let cell = tableView.dequeueReusableCell(withIdentifier: "AICell", for: indexPath) as! AIMessageCell
-                cell.configure(with: message)
-                return cell
-            case "system":
-                let cell = tableView.dequeueReusableCell(withIdentifier: "SystemCell", for: indexPath) as! SystemMessageCell
-                cell.configure(with: message)
-                return cell
-            default:
-                return UITableViewCell()
+        case "user":
+            let cell = tableView.dequeueReusableCell(withIdentifier: "UserCell", for: indexPath) as! UserMessageCell
+            cell.configure(with: message)
+            return cell
+            
+        case "ai":
+            let cell = tableView.dequeueReusableCell(withIdentifier: "AICell", for: indexPath) as! AIMessageCell
+            cell.configure(with: message)
+            return cell
+            
+        default: // system messages
+            let cell = tableView.dequeueReusableCell(withIdentifier: "SystemCell", for: indexPath) as! SystemMessageCell
+            cell.configure(with: message)
+            return cell
         }
     }
+}
 
-    // MARK: - UISheetPresentationControllerDelegate
+// MARK: - UITableViewDelegate
 
-    // Handle sheet dismissal properly
-    func presentationControllerDidDismiss(_: UIPresentationController) {
-        dismissHandler?()
+extension ChatViewController {
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        // Deselect the row
+        tableView.deselectRow(at: indexPath, animated: true)
     }
 }
 
 // MARK: - UITextFieldDelegate
 
 extension ChatViewController: UITextFieldDelegate {
-    func textFieldShouldReturn(_: UITextField) -> Bool {
-        sendMessage()
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        // When return key is pressed, send the message
+        if let text = textField.text, !text.isEmpty, !isProcessingMessage {
+            sendMessage()
+        }
         return true
+    }
+}
+    // MARK: - UISheetPresentationControllerDelegate
+
+    // Handle sheet dismissal properly
+    func presentationControllerDidDismiss(_: UIPresentationController) {
+        dismissHandler?()
     }
 }
