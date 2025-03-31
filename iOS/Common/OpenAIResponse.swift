@@ -5,6 +5,7 @@
 // Backdoor App Signer is proprietary software. You may not use, modify, or distribute it except as expressly permitted under the terms of the Proprietary Software License.
 
 import Foundation
+import CoreML
 
 /// Model for AI responses - structure maintained for compatibility
 struct OpenAIResponse: Codable {
@@ -34,7 +35,40 @@ struct OpenAIResponse: Codable {
                 ),
             ],
             id: UUID().uuidString,
-            model: "backdoor-custom-ai"
+            model: "backdoor-coreml-model"
+        )
+    }
+    
+    /// Creates a response from a Core ML prediction
+    static func createFromCoreML(content: String, modelName: String = "BackdoorAssistant") -> OpenAIResponse {
+        return OpenAIResponse(
+            choices: [
+                Choice(
+                    message: Message(content: content, role: "assistant"),
+                    index: 0,
+                    finish_reason: "stop"
+                ),
+            ],
+            id: UUID().uuidString,
+            model: modelName
+        )
+    }
+    
+    /// Creates an error response
+    static func createError(errorMessage: String) -> OpenAIResponse {
+        return OpenAIResponse(
+            choices: [
+                Choice(
+                    message: Message(
+                        content: "I encountered an error processing your request: \(errorMessage). Please try again.",
+                        role: "assistant"
+                    ),
+                    index: 0,
+                    finish_reason: "error"
+                ),
+            ],
+            id: UUID().uuidString,
+            model: "backdoor-coreml-model"
         )
     }
 }
