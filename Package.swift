@@ -42,6 +42,14 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.27.0"),
         .package(url: "https://github.com/apple/swift-nio-transport-services.git", from: "1.21.0"),
         
+        // MARK: - AI and Machine Learning
+        
+        // Core ML integration helpers
+        .package(url: "https://github.com/mlkit-swift/mlkit.git", from: "0.5.0"),
+        
+        // NLP Tools for text processing
+        .package(url: "https://github.com/apple/swift-nlp.git", from: "0.5.0"),
+        
         // MARK: - Modern Swift Features
         
         // Logging - Production-grade logging system
@@ -80,6 +88,10 @@ let package = Package(
                 .product(name: "NIO", package: "swift-nio"),
                 .product(name: "NIOSSL", package: "swift-nio-ssl"),
                 .product(name: "NIOTransportServices", package: "swift-nio-transport-services"),
+                
+                // AI and Machine Learning
+                .product(name: "MLKit", package: "mlkit"),
+                .product(name: "NaturalLanguage", package: "swift-nlp"),
                 
                 // Modern Swift features
                 .product(name: "Logging", package: "swift-log"),
